@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: instagram-tracker-api
+    env: python
+    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: instagram-tracker-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: APNS_TEAM_ID
+        sync: false
+      - key: APNS_KEY_ID
+        sync: false
+      - key: APNS_AUTH_KEY
+        sync: false
+      - key: APNS_BUNDLE_ID
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+
+databases:
+  - name: instagram-tracker-db
+    databaseName: instagram_tracker
+    user: tracker_user
+    plan: free
