@@ -18,8 +18,8 @@ class AccountsViewModel: ObservableObject {
         isLoading = false
     }
 
-    func addAccount(username: String, intervalHours: Int) async throws -> TrackedAccount {
-        let account = try await APIService.shared.addAccount(username: username, intervalHours: intervalHours)
+    func addAccount(username: String, intervalMinutes: Int) async throws -> TrackedAccount {
+        let account = try await APIService.shared.addAccount(username: username, intervalMinutes: intervalMinutes)
         accounts.insert(account, at: 0)
         return account
     }

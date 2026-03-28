@@ -4,7 +4,7 @@ struct TrackedAccount: Identifiable, Codable {
     let id: String
     let userId: String
     let instagramUsername: String
-    var checkIntervalHours: Int
+    var checkIntervalMinutes: Int
     var isActive: Bool
     let createdAt: Date
     var latestSnapshot: AccountSnapshot?
@@ -13,7 +13,7 @@ struct TrackedAccount: Identifiable, Codable {
         case id
         case userId = "user_id"
         case instagramUsername = "instagram_username"
-        case checkIntervalHours = "check_interval_hours"
+        case checkIntervalMinutes = "check_interval_minutes"
         case isActive = "is_active"
         case createdAt = "created_at"
         case latestSnapshot = "latest_snapshot"

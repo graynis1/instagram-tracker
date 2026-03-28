@@ -51,7 +51,7 @@ def _serialize_account(acc: TrackedAccount) -> TrackedAccountResponse:
         id=str(acc.id),
         user_id=str(acc.user_id),
         instagram_username=acc.instagram_username,
-        check_interval_hours=acc.check_interval_hours,
+        check_interval_minutes=acc.check_interval_minutes,
         is_active=acc.is_active,
         created_at=acc.created_at,
         latest_snapshot=latest,
@@ -93,14 +93,14 @@ def add_account(
     account = TrackedAccount(
         user_id=user.id,
         instagram_username=body.instagram_username.lower().strip(),
-        check_interval_hours=body.check_interval_hours,
+        check_interval_minutes=body.check_interval_minutes,
     )
     db.add(account)
     db.commit()
     db.refresh(account)
 
     # Scheduler'a ekle
-    get_scheduler().add_job(str(account.id), account.check_interval_hours)
+    get_scheduler().add_job(str(account.id), account.check_interval_minutes)
 
     # İlk snapshot'ı arka planda al
     import threading
@@ -158,14 +158,14 @@ def update_account(
     if not account:
         raise HTTPException(status_code=404, detail="Hesap bulunamadı")
 
-    if body.check_interval_hours is not None:
-        account.check_interval_hours = body.check_interval_hours
-        get_scheduler().add_job(account_id, body.check_interval_hours)
+    if body.check_interval_minutes is not None:
+        account.check_interval_minutes = body.check_interval_minutes
+        get_scheduler().add_job(account_id, body.check_interval_minutes)
 
     if body.is_active is not None:
         account.is_active = body.is_active
         if body.is_active:
-            get_scheduler().add_job(account_id, account.check_interval_hours)
+            get_scheduler().add_job(account_id, account.check_interval_minutes)
         else:
             get_scheduler().remove_job(account_id)
 

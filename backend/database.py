@@ -67,7 +67,7 @@ class TrackedAccount(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     instagram_username = Column(String, nullable=False)
-    check_interval_hours = Column(Integer, default=6)
+    check_interval_minutes = Column(Integer, default=360)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

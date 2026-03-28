@@ -11,8 +11,10 @@ from notifications import NotificationService
 
 logger = logging.getLogger(__name__)
 
-# Her hesap için son kontrol zamanı (rate limit: 30 dakika)
+# Her hesap için son kontrol zamanı — aynı hesabı interval'den önce yeniden tarama
 _last_checked: dict[str, datetime] = {}
+# Her hesap için ayarlı interval (dakika) — rate limit hesabında kullanılır
+_account_intervals: dict[str, int] = {}
 
 scraper = InstagramScraper()
 notifier = NotificationService()
@@ -22,7 +24,10 @@ def _can_check(account_id: str) -> bool:
     last = _last_checked.get(account_id)
     if last is None:
         return True
-    return datetime.utcnow() - last >= timedelta(minutes=30)
+    interval_minutes = _account_intervals.get(account_id, 360)
+    # En az 4 dakika, en fazla interval süresi kadar bekle
+    cooldown = max(4, interval_minutes - 1)
+    return datetime.utcnow() - last >= timedelta(minutes=cooldown)
 
 
 def check_account(tracked_account_id: str):
@@ -218,7 +223,7 @@ class AccountScheduler:
                 TrackedAccount.is_active == True
             ).all()
             for acc in accounts:
-                self._add_job_internal(str(acc.id), acc.check_interval_hours)
+                self._add_job_internal(str(acc.id), acc.check_interval_minutes)
             logger.info(f"{len(accounts)} hesap için scheduler başlatıldı")
         finally:
             db.close()
@@ -229,21 +234,22 @@ class AccountScheduler:
         if self._scheduler.running:
             self._scheduler.shutdown(wait=False)
 
-    def _add_job_internal(self, tracked_account_id: str, interval_hours: int):
+    def _add_job_internal(self, tracked_account_id: str, interval_minutes: int):
+        _account_intervals[tracked_account_id] = interval_minutes
         job_id = f"account_{tracked_account_id}"
         if self._scheduler.get_job(job_id):
             self._scheduler.remove_job(job_id)
         self._scheduler.add_job(
             func=check_account,
-            trigger=IntervalTrigger(hours=interval_hours),
+            trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
             args=[tracked_account_id],
             replace_existing=True,
         )
-        logger.debug(f"Job eklendi: {job_id}, her {interval_hours} saatte bir")
+        logger.debug(f"Job eklendi: {job_id}, her {interval_minutes} dakikada bir")
 
-    def add_job(self, tracked_account_id: str, interval_hours: int):
-        self._add_job_internal(tracked_account_id, interval_hours)
+    def add_job(self, tracked_account_id: str, interval_minutes: int):
+        self._add_job_internal(tracked_account_id, interval_minutes)
 
     def remove_job(self, tracked_account_id: str):
         job_id = f"account_{tracked_account_id}"

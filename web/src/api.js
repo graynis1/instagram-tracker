@@ -30,10 +30,10 @@ async function request(path, options = {}) {
 
 export const api = {
   getAccounts: ()              => request('/api/accounts'),
-  addAccount:  (username, intervalHours) =>
+  addAccount:  (username, intervalMinutes) =>
     request('/api/accounts', {
       method: 'POST',
-      body: JSON.stringify({ instagram_username: username, check_interval_hours: intervalHours, user_id: getUserID() }),
+      body: JSON.stringify({ instagram_username: username, check_interval_minutes: intervalMinutes, user_id: getUserID() }),
     }),
   deleteAccount: (id)          => request(`/api/accounts/${id}`, { method: 'DELETE' }),
   updateAccount: (id, patch)   => request(`/api/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),

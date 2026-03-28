@@ -130,10 +130,10 @@ actor APIService {
         return try await request(path: "/api/accounts")
     }
 
-    func addAccount(username: String, intervalHours: Int) async throws -> TrackedAccount {
+    func addAccount(username: String, intervalMinutes: Int) async throws -> TrackedAccount {
         let body = try JSONSerialization.data(withJSONObject: [
             "instagram_username": username,
-            "check_interval_hours": intervalHours,
+            "check_interval_minutes": intervalMinutes,
             "user_id": userID,
         ])
         return try await request(path: "/api/accounts", method: "POST", body: body)

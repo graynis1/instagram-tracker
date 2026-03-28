@@ -5,7 +5,7 @@ struct AddAccountView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var username = ""
-    @State private var selectedInterval = 6
+    @State private var selectedInterval = 360
     @State private var notifyFollowerChange = true
     @State private var notifyFollowingChange = true
     @State private var notifyNewPost = true
@@ -14,8 +14,8 @@ struct AddAccountView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    private let intervals = [1, 2, 3, 6, 12]
-    private let intervalLabels = ["1 Saat", "2 Saat", "3 Saat", "6 Saat", "12 Saat"]
+    private let intervals      = [5,      15,      30,      60,       180,      360,      720]
+    private let intervalLabels = ["5 Dk", "15 Dk", "30 Dk", "1 Saat", "3 Saat", "6 Saat", "12 Saat"]
 
     var body: some View {
         NavigationStack {
@@ -185,7 +185,7 @@ struct AddAccountView: View {
         isLoading = true
         errorMessage = nil
         do {
-            _ = try await vm.addAccount(username: trimmed, intervalHours: selectedInterval)
+            _ = try await vm.addAccount(username: trimmed, intervalMinutes: selectedInterval)
             dismiss()
         } catch {
             withAnimation { errorMessage = error.localizedDescription }

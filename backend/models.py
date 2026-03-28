@@ -38,12 +38,12 @@ class DeviceRegister(BaseModel):
 
 class TrackedAccountCreate(BaseModel):
     instagram_username: str
-    check_interval_hours: int = Field(default=6, ge=1, le=24)
+    check_interval_minutes: int = Field(default=360, ge=5, le=1440)
     user_id: str
 
 
 class TrackedAccountUpdate(BaseModel):
-    check_interval_hours: Optional[int] = Field(default=None, ge=1, le=24)
+    check_interval_minutes: Optional[int] = Field(default=None, ge=5, le=1440)
     is_active: Optional[bool] = None
 
 
@@ -51,7 +51,7 @@ class TrackedAccountResponse(BaseModel):
     id: str
     user_id: str
     instagram_username: str
-    check_interval_hours: int
+    check_interval_minutes: int
     is_active: bool
     created_at: datetime
     latest_snapshot: Optional["AccountSnapshotResponse"] = None

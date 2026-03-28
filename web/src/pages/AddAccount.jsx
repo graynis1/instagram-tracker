@@ -4,17 +4,19 @@ import { api } from '../api'
 import Spinner from '../components/Spinner'
 
 const INTERVALS = [
-  { hours: 1,  label: '1 Saat' },
-  { hours: 2,  label: '2 Saat' },
-  { hours: 3,  label: '3 Saat' },
-  { hours: 6,  label: '6 Saat' },
-  { hours: 12, label: '12 Saat' },
+  { minutes: 5,   label: '5 Dakika' },
+  { minutes: 15,  label: '15 Dakika' },
+  { minutes: 30,  label: '30 Dakika' },
+  { minutes: 60,  label: '1 Saat' },
+  { minutes: 180, label: '3 Saat' },
+  { minutes: 360, label: '6 Saat' },
+  { minutes: 720, label: '12 Saat' },
 ]
 
 export default function AddAccount() {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
-  const [interval, setInterval] = useState(6)
+  const [interval, setInterval] = useState(360)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
 
@@ -77,13 +79,13 @@ export default function AddAccount() {
         <div>
           <p className="section-label mb-2">Kontrol Sıklığı</p>
           <div className="grid grid-cols-2 gap-2">
-            {INTERVALS.map(({ hours, label }) => (
+            {INTERVALS.map(({ minutes, label }) => (
               <button
-                key={hours}
+                key={minutes}
                 type="button"
-                onClick={() => setInterval(hours)}
+                onClick={() => setInterval(minutes)}
                 className={`py-3 rounded-xl text-sm font-medium transition-all border
-                  ${interval === hours
+                  ${interval === minutes
                     ? 'bg-bg-purple text-brand-purple border-brand-purple font-bold'
                     : 'bg-white text-txt-secondary border-transparent hover:border-gray-200'
                   }`}

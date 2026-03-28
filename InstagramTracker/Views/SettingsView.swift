@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("defaultIntervalHours") private var defaultInterval = 6
+    @AppStorage("defaultIntervalMinutes") private var defaultInterval = 360
     @AppStorage("notifyFollowerChange") private var notifyFollowerChange = true
     @AppStorage("notifyFollowingChange") private var notifyFollowingChange = true
     @AppStorage("notifyNewPost") private var notifyNewPost = true
@@ -10,8 +10,8 @@ struct SettingsView: View {
 
     @State private var showDeleteAlert = false
 
-    private let intervals = [1, 2, 3, 6, 12]
-    private let intervalLabels = ["1 Saat", "2 Saat", "3 Saat", "6 Saat", "12 Saat"]
+    private let intervals      = [5,      15,      30,      60,       180,      360,      720]
+    private let intervalLabels = ["5 Dk", "15 Dk", "30 Dk", "1 Saat", "3 Saat", "6 Saat", "12 Saat"]
 
     var body: some View {
         NavigationStack {
