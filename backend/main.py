@@ -21,18 +21,23 @@ def _apply_runtime_migrations():
     Alembic migration'ın çalışmadığı durumlar için güvenlik ağı.
     check_interval_hours → check_interval_minutes dönüşümünü sütun bazında kontrol eder.
     """
-    from sqlalchemy import text, inspect as sa_inspect
+    from sqlalchemy import text
     try:
         with engine.connect() as conn:
-            inspector = sa_inspect(engine)
-            if 'tracked_accounts' not in inspector.get_table_names():
-                return  # Tablo yok, create_tables() halleder
-            cols = [c['name'] for c in inspector.get_columns('tracked_accounts')]
-            has_old = 'check_interval_hours' in cols
-            has_new = 'check_interval_minutes' in cols
+            # Hızlı sütun varlık kontrolü — information_schema sorgusu
+            result = conn.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'tracked_accounts'
+                  AND column_name IN ('check_interval_hours', 'check_interval_minutes')
+            """))
+            existing = {row[0] for row in result}
+            has_old = 'check_interval_hours' in existing
+            has_new = 'check_interval_minutes' in existing
+
+            if not has_old and not has_new:
+                return  # Tablo henüz yok, create_tables() halleder
 
             if has_old and not has_new:
-                # Sütunu yeniden adlandır
                 conn.execute(text(
                     'ALTER TABLE tracked_accounts '
                     'RENAME COLUMN check_interval_hours TO check_interval_minutes'
@@ -40,7 +45,6 @@ def _apply_runtime_migrations():
                 conn.commit()
                 logger.info("Runtime migration: check_interval_hours → check_interval_minutes")
             elif has_old and has_new:
-                # Her ikisi de var — eski sütunu temizle
                 conn.execute(text(
                     'UPDATE tracked_accounts '
                     'SET check_interval_minutes = check_interval_hours * 60 '
