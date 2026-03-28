@@ -37,10 +37,23 @@ class AccountDetailViewModel: ObservableObject {
 
     func checkNow() async {
         isCheckingNow = true
+        let prevTime = snapshot?.snapshottedAt
         do {
             try await APIService.shared.checkNow(accountId: account.id)
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            await loadDetail()
+            // Yeni snapshot gelene kadar polling (max 40 saniye, 2s aralık)
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if let newSnap = try? await APIService.shared.getSnapshot(accountId: account.id) {
+                    if newSnap.snapshottedAt != prevTime {
+                        snapshot = newSnap
+                        // Geçmişi de arka planda güncelle
+                        if let hist = try? await APIService.shared.getHistory(accountId: account.id) {
+                            history = hist.items
+                        }
+                        break
+                    }
+                }
+            }
         } catch {
             self.error = error.localizedDescription
         }

@@ -70,11 +70,24 @@ export default function AccountDetail() {
 
   async function handleCheckNow() {
     setChecking(true)
+    const prevTime = snap?.snapshotted_at ?? null
     try {
       await api.checkNow(id)
-      setTimeout(() => { load(); setChecking(false) }, 3000)
+      // Yeni snapshot gelene kadar polling (max 40 saniye, 2s aralık)
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        const newSnap = await api.getSnapshot(id).catch(() => null)
+        if (newSnap && newSnap.snapshotted_at !== prevTime) {
+          setSnap(newSnap)
+          // Geçmişi de güncelle
+          api.getAccountHistory(id).then(r => setHistory(r.items || [])).catch(() => {})
+          break
+        }
+      }
     } catch (e) {
-      alert(e.message); setChecking(false)
+      alert(e.message)
+    } finally {
+      setChecking(false)
     }
   }
 

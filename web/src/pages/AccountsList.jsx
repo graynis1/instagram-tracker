@@ -111,6 +111,13 @@ export default function AccountsList() {
 
   useEffect(() => { load() }, [load])
 
+  // Detay sayfasından geri dönünce listeyi yenile
+  useEffect(() => {
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [load])
+
   return (
     <div>
       {/* Başlık */}
