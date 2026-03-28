@@ -30,24 +30,34 @@ def _can_check(account_id: str) -> bool:
     return datetime.utcnow() - last >= timedelta(minutes=cooldown)
 
 
-def check_account(tracked_account_id: str):
-    """Bir hesabı kontrol et, değişiklikleri kaydet ve bildirim gönder."""
+def check_account(tracked_account_id: str) -> dict:
+    """
+    Bir hesabı kontrol et, değişiklikleri kaydet ve bildirim gönder.
+    Sonucu dict olarak döndürür: {"ok": True, "snapshot": {...}} veya {"ok": False, "error": "..."}
+    """
+    import uuid as _uuid
     if not _can_check(tracked_account_id):
-        logger.debug(f"Hesap {tracked_account_id} henüz 30 dakika geçmedi, atlanıyor")
-        return
+        logger.debug(f"Hesap {tracked_account_id} henüz cooldown'da, atlanıyor")
+        return {"ok": False, "error": "cooldown"}
 
     _last_checked[tracked_account_id] = datetime.utcnow()
     db = SessionLocal()
 
     try:
+        # UUID string → UUID nesnesi (SQLAlchemy UUID sütunu ile güvenli karşılaştırma)
+        try:
+            aid = _uuid.UUID(tracked_account_id)
+        except ValueError:
+            return {"ok": False, "error": "invalid_id"}
+
         account = db.query(TrackedAccount).filter(
-            TrackedAccount.id == tracked_account_id,
+            TrackedAccount.id == aid,
             TrackedAccount.is_active == True
         ).first()
 
         if not account:
             logger.warning(f"Hesap {tracked_account_id} bulunamadı veya pasif")
-            return
+            return {"ok": False, "error": "not_found"}
 
         username = account.instagram_username
         logger.info(f"@{username} kontrol ediliyor...")
@@ -55,8 +65,10 @@ def check_account(tracked_account_id: str):
         # Profil istatistiklerini al
         stats = scraper.get_profile_stats(username)
         if "error" in stats:
+            err = stats.get("error", "unknown")
+            details = stats.get("details", "")
             logger.warning(f"@{username} scrape hatası: {stats}")
-            return
+            return {"ok": False, "error": err, "details": details, "username": username}
 
         # Önceki snapshot
         old_snapshot: Optional[AccountSnapshot] = (
@@ -93,9 +105,8 @@ def check_account(tracked_account_id: str):
         db.commit()
 
         # Bildirimleri gönder (async çalıştır)
-        # Account'u user ilişkisiyle taze çek
         account_with_user = db.query(TrackedAccount).filter(
-            TrackedAccount.id == tracked_account_id
+            TrackedAccount.id == aid
         ).first()
 
         if account_with_user:
@@ -107,10 +118,19 @@ def check_account(tracked_account_id: str):
             ))
 
         logger.info(f"@{username} kontrol tamamlandı")
+        return {
+            "ok": True,
+            "username": username,
+            "followers_count": new_snapshot.followers_count,
+            "following_count": new_snapshot.following_count,
+            "posts_count": new_snapshot.posts_count,
+            "snapshotted_at": new_snapshot.snapshotted_at.isoformat(),
+        }
 
     except Exception as e:
         db.rollback()
         logger.error(f"check_account hatası {tracked_account_id}: {e}", exc_info=True)
+        return {"ok": False, "error": "exception", "details": str(e)}
     finally:
         db.close()
 
@@ -257,10 +277,10 @@ class AccountScheduler:
             self._scheduler.remove_job(job_id)
             logger.debug(f"Job kaldırıldı: {job_id}")
 
-    def check_account_now(self, tracked_account_id: str):
+    def check_account_now(self, tracked_account_id: str) -> dict:
         """Manuel anlık kontrol — rate limit bypass."""
         _last_checked.pop(tracked_account_id, None)
-        check_account(tracked_account_id)
+        return check_account(tracked_account_id)
 
 
 _scheduler_instance: Optional[AccountScheduler] = None

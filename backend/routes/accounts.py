@@ -218,7 +218,7 @@ def get_snapshot(
     )
 
 
-@router.post("/{account_id}/check-now", status_code=202)
+@router.post("/{account_id}/check-now", status_code=200)
 def check_now(
     account_id: str,
     x_user_id: str = Header(..., alias="X-User-ID"),
@@ -237,12 +237,15 @@ def check_now(
     if not account:
         raise HTTPException(status_code=404, detail="Hesap bulunamadı")
 
-    import threading
-    t = threading.Thread(
-        target=get_scheduler().check_account_now,
-        args=(account_id,),
-        daemon=True,
-    )
-    t.start()
+    # Senkron çalıştır — sonucu ve hatayı doğrudan döndür
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(get_scheduler().check_account_now, account_id)
+        try:
+            result = future.result(timeout=60)
+        except FuturesTimeout:
+            return {"ok": False, "error": "timeout", "details": "60 saniye içinde tamamlanamadı"}
+        except Exception as e:
+            return {"ok": False, "error": "exception", "details": str(e)}
 
-    return {"message": "Kontrol başlatıldı", "account_id": account_id}
+    return result

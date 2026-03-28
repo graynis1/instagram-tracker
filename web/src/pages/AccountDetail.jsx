@@ -38,12 +38,13 @@ export default function AccountDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
 
-  const [account, setAccount]   = useState(null)
-  const [snap, setSnap]         = useState(null)
-  const [history, setHistory]   = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [checking, setChecking] = useState(false)
-  const [error, setError]       = useState(null)
+  const [account, setAccount]     = useState(null)
+  const [snap, setSnap]           = useState(null)
+  const [history, setHistory]     = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [checking, setChecking]   = useState(false)
+  const [error, setError]         = useState(null)
+  const [checkError, setCheckError] = useState(null)
 
   async function load() {
     setLoading(true); setError(null)
@@ -70,22 +71,22 @@ export default function AccountDetail() {
 
   async function handleCheckNow() {
     setChecking(true)
-    const prevTime = snap?.snapshotted_at ?? null
+    setCheckError(null)
     try {
-      await api.checkNow(id)
-      // Yeni snapshot gelene kadar polling (max 40 saniye, 2s aralık)
-      for (let i = 0; i < 20; i++) {
-        await new Promise(r => setTimeout(r, 2000))
-        const newSnap = await api.getSnapshot(id).catch(() => null)
-        if (newSnap && newSnap.snapshotted_at !== prevTime) {
-          setSnap(newSnap)
-          // Geçmişi de güncelle
-          api.getAccountHistory(id).then(r => setHistory(r.items || [])).catch(() => {})
-          break
-        }
+      const result = await api.checkNow(id)
+      if (result.ok) {
+        // Başarılı — güncel snapshot'ı çek
+        const [newSnap, newHist] = await Promise.allSettled([
+          api.getSnapshot(id),
+          api.getAccountHistory(id),
+        ])
+        if (newSnap.status === 'fulfilled') setSnap(newSnap.value)
+        if (newHist.status === 'fulfilled') setHistory(newHist.value.items || [])
+      } else {
+        setCheckError(result.details || result.error || 'Kontrol başarısız')
       }
     } catch (e) {
-      alert(e.message)
+      setCheckError(e.message)
     } finally {
       setChecking(false)
     }
@@ -114,6 +115,14 @@ export default function AccountDetail() {
           {checking ? 'Kontrol ediliyor...' : 'Şimdi Kontrol Et'}
         </button>
       </div>
+
+      {/* Kontrol hatası */}
+      {checkError && (
+        <div className="card p-3.5 bg-status-bgRed border border-status-red/20 flex items-center justify-between">
+          <span className="text-status-red text-sm">⚠️ {checkError}</span>
+          <button onClick={() => setCheckError(null)} className="text-status-red text-xs ml-2">✕</button>
+        </div>
+      )}
 
       {/* Profil kartı */}
       <div className="card p-5 flex gap-4">
