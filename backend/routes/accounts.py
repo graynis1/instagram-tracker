@@ -237,15 +237,20 @@ def check_now(
     if not account:
         raise HTTPException(status_code=404, detail="Hesap bulunamadı")
 
-    # Senkron çalıştır — sonucu ve hatayı doğrudan döndür
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(get_scheduler().check_account_now, account_id)
-        try:
-            result = future.result(timeout=60)
-        except FuturesTimeout:
-            return {"ok": False, "error": "timeout", "details": "60 saniye içinde tamamlanamadı"}
-        except Exception as e:
-            return {"ok": False, "error": "exception", "details": str(e)}
+    # Thread.join kullan — ThreadPoolExecutor context manager shutdown(wait=True) bug'ından kaçınmak için
+    import threading
+    result_box: dict = {}
 
-    return result
+    def run():
+        try:
+            result_box["result"] = get_scheduler().check_account_now(account_id)
+        except Exception as e:
+            result_box["result"] = {"ok": False, "error": "exception", "details": str(e)}
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(timeout=20)
+
+    if "result" not in result_box:
+        return {"ok": False, "error": "timeout", "details": "20 saniye içinde tamamlanamadı"}
+    return result_box["result"]

@@ -9,23 +9,33 @@ function getUserID() {
   return id
 }
 
-async function request(path, options = {}) {
-  const res = await fetch(BASE_URL + path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-ID': getUserID(),
-      ...(options.headers || {}),
-    },
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    let msg = text
-    try { msg = JSON.parse(text)?.detail || text } catch {}
-    throw new Error(msg || `HTTP ${res.status}`)
+async function request(path, options = {}, timeoutMs = 0) {
+  let controller, timer
+  if (timeoutMs > 0) {
+    controller = new AbortController()
+    timer = setTimeout(() => controller.abort(), timeoutMs)
+    options = { ...options, signal: controller.signal }
   }
-  if (res.status === 204) return null
-  return res.json()
+  try {
+    const res = await fetch(BASE_URL + path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-ID': getUserID(),
+        ...(options.headers || {}),
+      },
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      let msg = text
+      try { msg = JSON.parse(text)?.detail || text } catch {}
+      throw new Error(msg || `HTTP ${res.status}`)
+    }
+    if (res.status === 204) return null
+    return res.json()
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export const api = {
@@ -38,7 +48,7 @@ export const api = {
   deleteAccount: (id)          => request(`/api/accounts/${id}`, { method: 'DELETE' }),
   updateAccount: (id, patch)   => request(`/api/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
   getSnapshot:   (id)          => request(`/api/accounts/${id}/snapshot`),
-  checkNow:      (id)          => request(`/api/accounts/${id}/check-now`, { method: 'POST' }),
+  checkNow:      (id)          => request(`/api/accounts/${id}/check-now`, { method: 'POST' }, 25000),
   getHistory:    (page = 1)    => request(`/api/history?page=${page}`),
   getAccountHistory: (id, page = 1) => request(`/api/history/${id}?page=${page}`),
   health:        ()            => request('/health'),

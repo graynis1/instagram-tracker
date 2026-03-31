@@ -1,146 +1,87 @@
-import time
-import random
+import httpx
 import logging
-from typing import Optional
-import instaloader
+import random
+import time
 
 logger = logging.getLogger(__name__)
 
-# Son istek zamanlarını takip et
 _last_request_time: float = 0.0
 
 
 def _rate_limit_wait():
     global _last_request_time
     elapsed = time.time() - _last_request_time
-    wait = random.uniform(3, 8)
+    wait = random.uniform(1, 3)
     if elapsed < wait:
         time.sleep(wait - elapsed)
     _last_request_time = time.time()
 
 
 class InstagramScraper:
-    def __init__(self):
-        self._loader = instaloader.Instaloader(
-            download_pictures=False,
-            download_videos=False,
-            download_video_thumbnails=False,
-            download_geotags=False,
-            download_comments=False,
-            save_metadata=False,
-            compress_json=False,
-            quiet=True,
-        )
-
-    def _new_loader(self) -> instaloader.Instaloader:
-        return instaloader.Instaloader(
-            download_pictures=False,
-            download_videos=False,
-            download_video_thumbnails=False,
-            download_geotags=False,
-            download_comments=False,
-            save_metadata=False,
-            compress_json=False,
-            quiet=True,
-        )
+    _HEADERS = {
+        "User-Agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/17.0 Mobile/15E148 Safari/604.1"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "X-IG-App-ID": "936619743392459",
+        "Connection": "keep-alive",
+    }
 
     def get_profile_stats(self, username: str) -> dict:
-        """
-        Profil istatistiklerini döndürür.
-        Hata durumunda {"error": "..."} döner, exception fırlatmaz.
-        """
         _rate_limit_wait()
+        url = f"https://i.instagram.com/api/v1/users/web_profile_info/?username={username}"
         try:
-            loader = self._new_loader()
-            profile = instaloader.Profile.from_username(loader.context, username)
+            with httpx.Client(timeout=12.0, follow_redirects=True) as client:
+                r = client.get(url, headers=self._HEADERS)
+
+            if r.status_code == 404:
+                return {"error": "profile_not_found", "details": f"@{username} profili bulunamadı"}
+            if r.status_code == 429:
+                return {"error": "rate_limited", "details": "Instagram istek limiti aşıldı, lütfen bekleyin"}
+            if r.status_code in (401, 403):
+                return {
+                    "error": "blocked",
+                    "details": "Instagram bu sunucudan gelen istekleri reddetti (401/403)",
+                }
+            if r.status_code != 200:
+                return {"error": "http_error", "details": f"Instagram HTTP {r.status_code}"}
+
+            data = r.json()
+            user = data.get("data", {}).get("user")
+            if not user:
+                return {"error": "user_not_found", "details": f"@{username} JSON'da bulunamadı"}
+
             return {
-                "followers_count": profile.followers,
-                "following_count": profile.followees,
-                "posts_count": profile.mediacount,
-                "is_private": profile.is_private,
-                "full_name": profile.full_name or "",
-                "biography": profile.biography or "",
-                "external_url": profile.external_url or "",
-                "is_verified": profile.is_verified,
-                "profile_pic_url": profile.profile_pic_url or "",
+                "followers_count": user.get("edge_followed_by", {}).get("count", 0),
+                "following_count": user.get("edge_follow", {}).get("count", 0),
+                "posts_count": user.get("edge_owner_to_timeline_media", {}).get("count", 0),
+                "is_private": user.get("is_private", False),
+                "full_name": user.get("full_name", ""),
+                "biography": user.get("biography", ""),
+                "external_url": user.get("external_url", "") or "",
+                "is_verified": user.get("is_verified", False),
+                "profile_pic_url": (
+                    user.get("profile_pic_url_hd")
+                    or user.get("profile_pic_url")
+                    or ""
+                ),
             }
-        except instaloader.exceptions.ProfileNotExistsException:
-            logger.warning(f"Profil bulunamadı: {username}")
-            return {"error": "profile_not_found", "username": username}
-        except instaloader.exceptions.ConnectionException as e:
-            msg = str(e).lower()
-            if "429" in msg or "rate" in msg or "too many" in msg:
-                logger.warning(f"Rate limit hit for {username}, 30 dakika bekleniyor")
-                time.sleep(1800)
-                return {"error": "rate_limited", "username": username}
-            logger.error(f"Bağlantı hatası {username}: {e}")
-            return {"error": "connection_error", "details": str(e)}
+        except httpx.TimeoutException:
+            return {"error": "timeout", "details": "Instagram yanıt vermedi (12 sn zaman aşımı)"}
+        except httpx.ConnectError as e:
+            return {"error": "connection_error", "details": f"Bağlantı kurulamadı: {e}"}
         except Exception as e:
-            logger.error(f"Beklenmedik hata {username}: {e}")
+            logger.error(f"Scraper hatası @{username}: {e}", exc_info=True)
             return {"error": "unknown_error", "details": str(e)}
 
     def get_followers_list(self, username: str) -> list[dict]:
-        """
-        Takipçi listesini döndürür.
-        Private hesapta veya hata durumunda boş liste döner.
-        """
-        _rate_limit_wait()
-        try:
-            loader = self._new_loader()
-            profile = instaloader.Profile.from_username(loader.context, username)
-            if profile.is_private:
-                return []
-            result = []
-            for follower in profile.get_followers():
-                _rate_limit_wait()
-                result.append({
-                    "username": follower.username,
-                    "full_name": follower.full_name or "",
-                    "profile_pic_url": follower.profile_pic_url or "",
-                })
-            return result
-        except instaloader.exceptions.LoginRequiredException:
-            logger.info(f"{username} takipçi listesi için login gerekiyor")
-            return []
-        except instaloader.exceptions.ConnectionException as e:
-            msg = str(e).lower()
-            if "429" in msg or "rate" in msg or "too many" in msg:
-                logger.warning(f"Rate limit (followers) {username}")
-                time.sleep(1800)
-            return []
-        except Exception as e:
-            logger.error(f"Takipçi listesi hatası {username}: {e}")
-            return []
+        # Login gerektirdiğinden devre dışı
+        return []
 
     def get_following_list(self, username: str) -> list[dict]:
-        """
-        Takip edilen listesini döndürür.
-        Private hesapta veya hata durumunda boş liste döner.
-        """
-        _rate_limit_wait()
-        try:
-            loader = self._new_loader()
-            profile = instaloader.Profile.from_username(loader.context, username)
-            if profile.is_private:
-                return []
-            result = []
-            for followee in profile.get_followees():
-                _rate_limit_wait()
-                result.append({
-                    "username": followee.username,
-                    "full_name": followee.full_name or "",
-                    "profile_pic_url": followee.profile_pic_url or "",
-                })
-            return result
-        except instaloader.exceptions.LoginRequiredException:
-            logger.info(f"{username} takip listesi için login gerekiyor")
-            return []
-        except instaloader.exceptions.ConnectionException as e:
-            msg = str(e).lower()
-            if "429" in msg or "rate" in msg or "too many" in msg:
-                logger.warning(f"Rate limit (following) {username}")
-                time.sleep(1800)
-            return []
-        except Exception as e:
-            logger.error(f"Takip listesi hatası {username}: {e}")
-            return []
+        # Login gerektirdiğinden devre dışı
+        return []

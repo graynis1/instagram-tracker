@@ -86,7 +86,7 @@ export default function AccountDetail() {
         setCheckError(result.details || result.error || 'Kontrol başarısız')
       }
     } catch (e) {
-      setCheckError(e.message)
+      setCheckError(e.name === 'AbortError' ? 'İstek zaman aşımına uğradı (25 sn)' : e.message)
     } finally {
       setChecking(false)
     }
